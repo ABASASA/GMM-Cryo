@@ -11,7 +11,7 @@ P  = 3;     % aribitrary, chosen to be small
 B = get_B_inplane(P);
 % bval1 = draw_inplane_dist(B,1, -50, -70, 'inplane_dist_most_nu');
 
-B = totally_NonUniform_SOS_dist(P);%     % "Project" to positive
+% B = totally_NonUniform_SOS_dist(P);%     % "Project" to positive
 % 
 % % getting random inplane uniform distributon -- expansion coefficients
 % % bval1 = draw_inplane_dist(B,1, -50, -70, 'inplane_dist_most_nu');
@@ -25,15 +25,27 @@ end
 % bval1 = draw_inplane_dist(B,1, -50, -70, 'inplane_dist_most_nu');
 
 %% Simulate kspace function
-gridSize = 15;  % number of voxels in each dimenison. take odd.
+gridSize = 19;  % number of voxels in each dimenison. take odd.
 
 % Sum of Gaussian
-% vol    = cryo_gaussian_phantom_3d('C1_params',gridSize,1);
+% vol1    = cryo_gaussian_phantom_3d('C1_params',gridSize,1);
 sigma = 200;
-T     = (gridSize/5)*[0 0 0; 0.08 0.1 0; -0.1 0 0.1]';%[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
-g     =  @(k) exp(1i*k'*T(:,1)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
-    exp(1i*k'*T(:,2)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
-    exp(1i*k'*T(:,3)).*exp(-pi^2/sigma*sum(k.*k)).' ;
+% T     = (gridSize/5)*[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';%[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
+% g     =  @(k) exp(1i*k'*T(:,1)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
+%     exp(1i*k'*T(:,2)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
+%     exp(1i*k'*T(:,3)).*exp(-pi^2/sigma*sum(k.*k)).' ;
+
+T     = (gridSize/5)*[0, 0, 0;
+                      0.15, 0.10, 0.10;
+                      -0.1, -0.15, 0;
+                      -0.1, 0.05, -0.05;
+                      0, 0.1, -0.1;]';%[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
+g     =  @(k) exp(1 * 1i*k'*T(:,1)) .* exp(-0.7   * pi^2/sigma*sum(k.*k)).' + ...
+              exp(1 * 1i*k'*T(:,2)) .* exp(-0.5 * pi^2/sigma*sum(k.*k)).' + ...
+              exp(1 * 1i*k'*T(:,3)) .* exp(-0.4   * pi^2/sigma*sum(k.*k)).' + ...
+              exp(1 * 1i*k'*T(:,4)) .* exp(-0.6   * pi^2/sigma*sum(k.*k)).' + ...
+              exp(1 * 1i*k'*T(:,5)) .* exp(-0.8   * pi^2/sigma*sum(k.*k)).' ;
+
 %% Vol on kspace over cartesian grid
 
 radius   = floor(gridSize/2);
@@ -59,18 +71,41 @@ volk = reshape(volf, gridSize, gridSize, gridSize);
 vol  = real(fftshift(ifftn(ifftshift(volk)))); % in real domain
 
 %% calculate 3D expansion and gamma coefficients
-beta  = .7;       % Bandlimit ratio
+beta  = .85;       % Bandlimit ratio
 delta = 0.99;    % Truncation parameter
 eps_p = 1e-3;    % Prescribed accuracy
 
 fprintf('Calculating 3D coefficients...');
 A = pswf_t_f_3d(vol, beta, delta);
+volBack      = pswf_t_b_3d(A,     gridSize, beta, delta);
+VisualVol(vol, ['vol_3NirAsaf']);
+VisualVol(volBack, ['vol_4NirAsaf']);
+
+
+
+
 fprintf('DONE \n');
 
 fprintf('Calculating gamma coefficients...');
 radius = floor(gridSize/2);
 c     = beta*pi*radius;              % Nyquist bandlimit
 gamma = PSWF_2D_3D_T_mat(c, delta, eps_p);
+L = max(gamma.band_idx_3d);  % the overall degree. Common to both 2D and 3D
+
+% Trncated
+[gamma_t,A_t] = gamma_truncate_2(gamma,A);
+APadded = A;
+for j=1:length(A{1})
+    if j<=length(A_t{1})
+        APadded{1}{j}     = APadded{1}{j};
+    else
+        APadded{1}{j}     = zeros(size(A{1}{j}));
+    end
+end
+Lt = max(gamma_t.band_idx_3d);
+volBackT      = pswf_t_b_3d(APadded,     gridSize, beta, delta);
+VisualVol(volBackT, ['vol_5NirAsaf']);
+
 fprintf('DONE \n');
 
 
@@ -120,9 +155,9 @@ fprintf('DONE in about %d seconds \n', round(tt));
 
 %% Compute Projecitons
 paramsName = 'C1_params' ;
-total_N      = 10000;
-beta  = 1;      % Bandlimit ratio
-eps_p = 1e-5;   % Prescribed accuracy
+total_N      = 5;10000;
+% beta  = 1;      % Bandlimit ratio
+% eps_p = 1e-5;   % Prescribed accuracy
 
 [~, proj_PSWF, weight] = GenerateObservationsPSWF(paramsName,...
                                 total_N, gridSize, B, beta, eps_p, gamma, g, x_2d, y_2d);
@@ -146,9 +181,9 @@ tt     = datetime('now');
 nameit = [nameit,'P_',num2str(P),'_',num2str(tt.Hour),'_',num2str(tt.Minute)];
 
 % main parameters
-L = max(gamma.band_idx_3d);  % the overall degree. Common to both 2D and 3D
-P = size(B,1);               % expansion length of the distribution
-M = max(gamma.ang_idx_2d)+1; % angular size of the moment
+% L = max(gamma.band_idx_3d);  % the overall degree. Common to both 2D and 3D
+% P = size(B,1);               % expansion length of the distribution
+% M = max(gamma.ang_idx_2d)+1; % angular size of the moment
 
 % vectorized version
 vec_AB_GT = A_B_to_vec_inplane(A, B, M-1);
@@ -181,36 +216,51 @@ weightsLs = norm(m1_hat(:))^2/norm(m2_hat(:))^2;
         Gamma_mat, sign_mat, m1_hat, m2_hat, initial_guess );
 fprintf('Done LS \n');
 
-
 save('GMM/Results/200819 - FirstTry/data.mat');
-% [A_est, ~] = VecAB_inplane_to_A_B(x, gamma);
-% fprintf('Finished...  \n');
-% 
-% 
-% %% Open a new foldr and save the results
-% saveit = 1;
+fprintf('Finished...  \n');
+
+
+
+
+%% Open a new foldr and save the results
+saveit = 1;
+filepath = 'GMM\Results\200819 - FirstTry\';
+[A_LS, ~] = VecAB_inplane_to_A_B(xLS, gamma);
+[A_GMM, ~] = VecAB_inplane_to_A_B(xEstGMM, gamma);
 % A_full = A;
-% if saveit
-% %     A_est_padded  = A_full;
-% %     A_padded      = A_full;
-% %     for j=1:length(A_full{1})
-% %         if j<=length(A_est{1})
-% %             A_est_padded{1}{j} = A_est{1}{j};
-% %             A_padded{1}{j}     = A_full{1}{j};
-% %         else
-% %             A_est_padded{1}{j} = zeros(size(A_full{1}{j}));
-% %             A_padded{1}{j}     = zeros(size(A_full{1}{j}));
-% %         end
-% %     end
-%     
-%     %inverse prolates stransform  TO DO AGAIN WITH OLD PACKAGE
-%     vol_hat  = pswf_t_b_3d(A_est, gridSize, beta, delta);
-%     vol      = pswf_t_b_3d(A,     gridSize, beta, delta);
-%     
-%     % print out volumes
-%     VisualVol(vol_hat,['est_',nameit]);
-%     VisualVol(vol, ['vol_',nameit]);
-%     [~, ~, volR] = cryo_align_densities(vol, vol_hat,1 ,1);
-%     VisualVol(volR, ['rot_est_',nameit]);
+if saveit
+    A_LS_padded  = A_LS;
+    A_padded     = A;
+%     for j=1:length(A{1})
+%         if j<=length(A_LS{1})
+%             A_LS_padded{1}{j} = A_LS{1}{j};
+%             A_padded{1}{j}     = A{1}{j};
+%         else
+%             A_LS_padded{1}{j} = zeros(size(A{1}{j}));
+%             A_padded{1}{j}     = zeros(size(A{1}{j}));
+%         end
+%     end
+    
+    %inverse prolates stransform  TO DO AGAIN WITH OLD PACKAGE
+    vol_LS  = pswf_t_b_3d(A_LS, gridSize, beta, delta);
+    vol      = pswf_t_b_3d(A,     gridSize, beta, delta);
+%     A = pswf_t_f_3d(vol, beta, delta);
+    % print out volumes
+    VisualVol(vol_LS,[filepath,'estLS_',nameit]);
+    VisualVol(vol, [filepath,'vol_',nameit]);
+%     [~, ~, volR] = cryo_align_densities(vol, vol_LS,1 ,1);
+%     VisualVol(volR, [filepath,'rot_estLS_',nameit]);
 %     rel_err       = norm(volR(:)-vol(:))/norm(vol(:))
-% end
+    
+    
+    %inverse prolates stransform  TO DO AGAIN WITH OLD PACKAGE
+    vol_GMM  = pswf_t_b_3d(A_GMM, gridSize, beta, delta);
+    vol      = pswf_t_b_3d(A,     gridSize, beta, delta);
+    
+    % print out volumes
+    VisualVol(vol_GMM,[filepath,'estGMM_',nameit]);
+    VisualVol(vol, [filepath,'vol_',nameit]);
+    [~, ~, volR] = cryo_align_densities(vol, vol_GMM,1 ,1);
+    VisualVol(volR, [filepath,'rot_estGMM_',nameit]);
+    rel_err       = norm(volR(:)-vol(:))/norm(vol(:))
+end

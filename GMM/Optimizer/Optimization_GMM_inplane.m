@@ -21,7 +21,7 @@ end
 
 options.maxinner = 35;
 options.tolgradnorm  = 1e-20;
-options.maxiter  = 60;
+options.maxiter  =  60;
 %% Run optimization
 [xEst, xcost, info, ~] = trustregions(problem, initial_guess, options);
 t_opt = toc;
