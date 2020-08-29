@@ -3,14 +3,14 @@ function [m1_hat, m2_hat] = EstimateMoments(proj_PSWF, weight, total_N, gamma)
 % fprintf('Averaging...');
 
 % initialize  variables
-perm_list = randperm(total_N);
 m1_hat = 0;
 m2_hat = 0;
 for i=1:total_N
     % averaging
-    m1_hat = m1_hat + proj_PSWF(:,:,perm_list(i))*weight(perm_list(i));
-    current_vec_proj = proj_PSWF(:,:,perm_list(i));
-    m2_hat = m2_hat + current_vec_proj(:)*current_vec_proj(:)'*weight(perm_list(i));
+    current_vec_proj = proj_PSWF(:,:,i);
+    m1_hat = m1_hat + current_vec_proj * weight(i);
+    
+    m2_hat = m2_hat + current_vec_proj(:) * current_vec_proj(:)' * weight(i);
 end
 
 % second moment initialization
@@ -24,7 +24,8 @@ for m=0:max(gamma.ang_idx_2d)
             max(gamma.ang_idx_2d)+1, nnz(gamma.ang_idx_2d==0) );
     end
 end
-m2_hat = current_m2_check/sum(weight(perm_list(1:end)));
+m1_hat = m1_hat / sum(weight);
+m2_hat = current_m2_check / sum(weight);
 % fprintf('...DONE \n');
 
 end

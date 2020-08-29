@@ -32,6 +32,9 @@ end
 reminders = reminders(:,1:counter);
 %% compute cov
 Omega=  cov(reminders.');
+AA = svd(Omega);
+% semilogy(AA);
+Omega = Omega + AA(800) * eye(size(Omega));
 W = pinv(Omega);
 
 end

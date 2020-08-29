@@ -76,10 +76,10 @@ delta = 0.99;    % Truncation parameter
 eps_p = 1e-3;    % Prescribed accuracy
 
 fprintf('Calculating 3D coefficients...');
-A = pswf_t_f_3d(vol, beta, delta);
-volBack      = pswf_t_b_3d(A,     gridSize, beta, delta);
-VisualVol(vol, ['vol_3NirAsaf']);
-VisualVol(volBack, ['vol_4NirAsaf']);
+AFull = pswf_t_f_3d(vol, beta, delta);
+% volBack      = pswf_t_b_3d(AFull,     gridSize, beta, delta);
+% VisualVol(vol, ['vol_3NirAsaf']);
+% VisualVol(volBack, ['vol_4NirAsaf']);
 
 
 
@@ -90,21 +90,20 @@ fprintf('Calculating gamma coefficients...');
 radius = floor(gridSize/2);
 c     = beta*pi*radius;              % Nyquist bandlimit
 gamma = PSWF_2D_3D_T_mat(c, delta, eps_p);
-L = max(gamma.band_idx_3d);  % the overall degree. Common to both 2D and 3D
 
 % Trncated
-[gamma_t,A_t] = gamma_truncate_2(gamma,A);
-APadded = A;
-for j=1:length(A{1})
-    if j<=length(A_t{1})
-        APadded{1}{j}     = APadded{1}{j};
-    else
-        APadded{1}{j}     = zeros(size(A{1}{j}));
-    end
-end
-Lt = max(gamma_t.band_idx_3d);
-volBackT      = pswf_t_b_3d(APadded,     gridSize, beta, delta);
-VisualVol(volBackT, ['vol_5NirAsaf']);
+[gamma,A] = gamma_truncate_2(gamma,AFull);
+% APadded = AFull;
+% for j=1:length(AFull{1})
+%     if j<=length(A{1})
+%         APadded{1}{j}     = A{1}{j};
+%     else
+%         APadded{1}{j}     = zeros(size(AFull{1}{j}));
+%     end
+% end
+% Lt = max(gamma.band_idx_3d);
+% volBackT      = pswf_t_b_3d(APadded,     gridSize, beta, delta);
+% VisualVol(volBackT, ['vol_5NirAsaf']);
 
 fprintf('DONE \n');
 
@@ -155,7 +154,7 @@ fprintf('DONE in about %d seconds \n', round(tt));
 
 %% Compute Projecitons
 paramsName = 'C1_params' ;
-total_N      = 5;10000;
+total_N      = 10000;
 % beta  = 1;      % Bandlimit ratio
 % eps_p = 1e-5;   % Prescribed accuracy
 
@@ -203,20 +202,36 @@ N = length(vec_AB_GT);
 %% running optimization
 option = 1;
 fprintf('Run GMM...  \n');
-
+ansCell = cell(2,1);
+parfor iOpt = 1 : 2
+if iOpt == 1
 [t_optGMM, xEstGMM, xcostGMM, infoGMM] = Optimization_GMM_inplane(vec_AB_GT, P, gamma, C_tensor,...
                     Gamma_mat, sign_mat, m1_hat, m2_hat, W, vecBoolMoments, initial_guess);
 fprintf('Done GMM \n');
-
-
+stGMM = struct;
+stGMM.t_optGMM = t_optGMM;
+stGMM.xEstGMM = xEstGMM;
+stGMM.xcostGMM = xcostGMM;
+stGMM.infoGMM = infoGMM;
+ansCell{iOpt} = stGMM;
+else
 fprintf('Run LS...  \n');
 
 weightsLs = norm(m1_hat(:))^2/norm(m2_hat(:))^2;
 [t_optLS, xLS, xcostLS, infoLS ] = Opimization_LS_inplane(N, weightsLs, P, gamma, C_tensor, ...            
         Gamma_mat, sign_mat, m1_hat, m2_hat, initial_guess );
-fprintf('Done LS \n');
+stLS = struct;
+stLS.t_optLS = t_optLS;
+stLS.xLS = xLS;
+stLS.xcostLS = xcostLS;
+stLS.infoLS = infoLS;
+ansCell{iOpt} = stLS;
+ fprintf('Done LS \n');
 
-save('GMM/Results/200819 - FirstTry/data.mat');
+
+
+end
+end
 fprintf('Finished...  \n');
 
 
@@ -224,43 +239,49 @@ fprintf('Finished...  \n');
 
 %% Open a new foldr and save the results
 saveit = 1;
-filepath = 'GMM\Results\200819 - FirstTry\';
-[A_LS, ~] = VecAB_inplane_to_A_B(xLS, gamma);
-[A_GMM, ~] = VecAB_inplane_to_A_B(xEstGMM, gamma);
+filepath = 'ResultsGMM/200819 - FirstTry/';
+mkdir(filepath)
+save([filepath, 'data.mat']);
+
+[A_LS, ~] = VecAB_inplane_to_A_B(ansCell{2}.xLS, gamma);
+[A_GMM, ~] = VecAB_inplane_to_A_B(ansCell{1}.xEstGMM, gamma);
 % A_full = A;
 if saveit
-    A_LS_padded  = A_LS;
-    A_padded     = A;
-%     for j=1:length(A{1})
-%         if j<=length(A_LS{1})
-%             A_LS_padded{1}{j} = A_LS{1}{j};
-%             A_padded{1}{j}     = A{1}{j};
-%         else
-%             A_LS_padded{1}{j} = zeros(size(A{1}{j}));
-%             A_padded{1}{j}     = zeros(size(A{1}{j}));
-%         end
-%     end
+    A_LS_padded  = AFull;
+    A_GMM_padded = AFull;
+    A_padded     = AFull;
+    for j=1:length(AFull{1})
+        if j<=length(A_LS{1})
+            A_LS_padded{1}{j} = A_LS{1}{j};
+            A_padded{1}{j}     = A{1}{j};
+            A_GMM_padded{1}{j} = A_GMM{1}{j};
+        else
+            A_LS_padded{1}{j} = zeros(size(AFull{1}{j}));
+            A_padded{1}{j}     = zeros(size(AFull{1}{j}));
+            A_GMM_padded{1}{j} = zeros(size(AFull{1}{j}));
+
+        end
+    end
     
     %inverse prolates stransform  TO DO AGAIN WITH OLD PACKAGE
-    vol_LS  = pswf_t_b_3d(A_LS, gridSize, beta, delta);
-    vol      = pswf_t_b_3d(A,     gridSize, beta, delta);
+    vol_LS  = pswf_t_b_3d(A_LS_padded, gridSize, beta, delta);
+    vol      = pswf_t_b_3d(A_padded,     gridSize, beta, delta);
 %     A = pswf_t_f_3d(vol, beta, delta);
     % print out volumes
     VisualVol(vol_LS,[filepath,'estLS_',nameit]);
     VisualVol(vol, [filepath,'vol_',nameit]);
-%     [~, ~, volR] = cryo_align_densities(vol, vol_LS,1 ,1);
-%     VisualVol(volR, [filepath,'rot_estLS_',nameit]);
-%     rel_err       = norm(volR(:)-vol(:))/norm(vol(:))
+    [~, ~, volRLS] = cryo_align_densities(vol, vol_LS,1 ,1);
+    VisualVol(volRLS, [filepath,'rot_estLS_',nameit]);
+    rel_errLS       = norm(volRLS(:)-vol(:))/norm(vol(:))
     
     
     %inverse prolates stransform  TO DO AGAIN WITH OLD PACKAGE
-    vol_GMM  = pswf_t_b_3d(A_GMM, gridSize, beta, delta);
-    vol      = pswf_t_b_3d(A,     gridSize, beta, delta);
+    vol_GMM  = pswf_t_b_3d(A_GMM_padded, gridSize, beta, delta);
     
     % print out volumes
     VisualVol(vol_GMM,[filepath,'estGMM_',nameit]);
-    VisualVol(vol, [filepath,'vol_',nameit]);
-    [~, ~, volR] = cryo_align_densities(vol, vol_GMM,1 ,1);
-    VisualVol(volR, [filepath,'rot_estGMM_',nameit]);
-    rel_err       = norm(volR(:)-vol(:))/norm(vol(:))
+    [~, ~, volRGMM] = cryo_align_densities(vol, vol_GMM,1 ,1);
+    VisualVol(volRGMM, [filepath,'rot_estGMM_',nameit]);
+    rel_errGMM       = norm(volRGMM(:)-vol(:))/norm(vol(:))
 end
+save([filepath, 'data.mat']);

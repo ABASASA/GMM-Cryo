@@ -6,43 +6,22 @@ clear;
 fprintf('**** Starting simulation ****\n');
 fprintf('\n  \n')
 fprintf('loading data..')
-P  = 3;     % aribitrary, chosen to be small
+P  = 2;     % aribitrary, chosen to be small
 B = get_B_inplane(P);
-% bval1 = draw_inplane_dist(B,1, -50, -70, 'inplane_dist_most_nu');
 
-% B = totally_NonUniform_SOS_dist(P);%     % "Project" to positive
-% 
-% % getting random inplane uniform distributon -- expansion coefficients
-% % bval1 = draw_inplane_dist(B,1, -50, -70, 'inplane_dist_most_nu');
-load ('SO3_fifteen.mat');
-[AI,AE,Acon] = linear_cons_B2(numel(B)-1,SO3);
-[BB,Breal]    = project_B_to_positive2(AI,AE,Acon,B);
-scl = 1/B{1};
-for i=1:numel(B)
-    B{i} =  scl*B{i};
-end
+
+
 %% Simulate kspace function
 gridSize = 19;  % number of voxels in each dimenison. take odd.
 
 % Sum of Gaussian
 % vol1    = cryo_gaussian_phantom_3d('C1_params',gridSize,1);
 sigma = 200;
-% T     = (gridSize/5)*[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';%[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
-% g     =  @(k) exp(1i*k'*T(:,1)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
-%     exp(1i*k'*T(:,2)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
-%     exp(1i*k'*T(:,3)).*exp(-pi^2/sigma*sum(k.*k)).' ;
 
-T     = (gridSize/5)*[0, 0, 0;
-                      0.15, 0.10, 0.10;
-                      -0.1, -0.15, 0;
-                      -0.1, 0.05, -0.05;
-                      0, 0.1, -0.1;]';%[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
-g     =  @(k) exp(1 * 1i*k'*T(:,1)) .* exp(-0.7   * pi^2/sigma*sum(k.*k)).' + ...
-              exp(1 * 1i*k'*T(:,2)) .* exp(-0.5 * pi^2/sigma*sum(k.*k)).' + ...
-              exp(1 * 1i*k'*T(:,3)) .* exp(-0.4   * pi^2/sigma*sum(k.*k)).' + ...
-              exp(1 * 1i*k'*T(:,4)) .* exp(-0.6   * pi^2/sigma*sum(k.*k)).' + ...
-              exp(1 * 1i*k'*T(:,5)) .* exp(-0.8   * pi^2/sigma*sum(k.*k)).' ;
-
+T     = (gridSize/5)*[0 0 0; 0.08 0.1 0; -0.1 0 0.1]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
+g     =  @(k) exp(1i*k'*T(:,1)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
+    exp(1i*k'*T(:,2)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
+    exp(1i*k'*T(:,3)).*exp(-pi^2/sigma*sum(k.*k)).' ;%+ ...
 %% Vol on kspace over cartesian grid
 
 radius   = floor(gridSize/2);
@@ -66,9 +45,10 @@ volf = g(vec_3d_grid);
 % back to real domain
 volk = reshape(volf, gridSize, gridSize, gridSize);
 vol  = real(fftshift(ifftn(ifftshift(volk)))); % in real domain
+vol  = vol*floor(size(x_2d,1)/2);   % Nir Sunday ?
 
 %% calculate 3D expansion and gamma coefficients
-beta  = .85;       % Bandlimit ratio
+beta  = 1;       % Bandlimit ratio
 delta = 0.99;    % Truncation parameter
 eps_p = 1e-3;    % Prescribed accuracy
 
@@ -80,9 +60,9 @@ fprintf('Calculating gamma coefficients...');
 radius = floor(gridSize/2);
 c     = beta*pi*radius;              % Nyquist bandlimit
 gamma = PSWF_2D_3D_T_mat(c, delta, eps_p);
-% Trncated
-[gamma,A] = gamma_truncate_2(gamma,A);
-
+%Trncated
+[gamma,A] = gamma_truncate_2(gamma,AFull);
+% A = AFull;
 fprintf('DONE \n');
 
 %% calculating moments
@@ -102,7 +82,7 @@ fprintf('DONE in about %d seconds \n', round(tt));
 
 fprintf('Moments calculation...');
 % first moment
-[ m1_true ] = FirstMoment_PSWF_v2(A, B, Gamma_mat, sign_mat);
+[ m1_true ] = FirstMoment_PSWF_v1_fixed(A, B, gamma);%Gamma_mat, sign_mat);
 fprintf('First moment is DONE. \n');
 
 % second moment
@@ -112,31 +92,45 @@ tic
 tt = toc;
 fprintf('DONE in about %d seconds \n', round(tt));
 
-
 %% Compute Projecitons
-paramsName = 'C1_params' ;
-Ns = floor(logspace(3,6));
-repNumber = 10;
-errorM1 = zeros(length(Ns), repNumber);
-errorM2 = zeros(length(Ns), repNumber);
+paramsName = [];%'C1_params' ;
+Ns = floor(linspace(5,10000,50));
+Ns = floor(logspace(1,5,20));
 
-for indexN = 1 : length(Ns)
-    total_N = Ns(indexN);
+repNumber = 10;
+
+% end
+
+errorM1 = zeros(repNumber, length(Ns));
+errorM2 = zeros(repNumber, length(Ns));
+[~, proj_PSWF, weight] = GenerateObservationsPSWF(paramsName,...
+                                Ns(end), gridSize, B, beta, eps_p, gamma, g, x_2d, y_2d);
+total_N= Ns(end);
+
+%%
+for iRep = 1 : repNumber
+    total_N = Ns(end);
     tmpErrorM1 = zeros(length(Ns),1);
     tmpErrorM2 = zeros(length(Ns),1);
-    for iRep = 1 : repNumber
+    fprintf('This is the %d round \n', iRep);
+%         perm_list = randperm(size(R,3));
+    perm_list = randperm(total_N);
 
-        [~, proj_PSWF, weight] = GenerateObservationsPSWF(paramsName,...
-                                        total_N, gridSize, B, beta, eps_p, gamma, g, x_2d, y_2d);
+    
+    parfor indexN = 1 : length(Ns)
+        currentPer = perm_list(1:Ns(indexN));
         %% Estimate m1_hat and m2_hat
-        [m1_hat, m2_hat] = EstimateMoments(proj_PSWF, weight, total_N, gamma);
-        tmpErrorM1(iRep) = norm(m1_hat(:) - m1_true(:)).^2;
-        tmpErrorM2(iRep) = norm(m2_hat(:) - m2_true(:)).^2;
+        [m1_hat, m2_hat] = EstimateMoments(proj_PSWF(:,:,currentPer), weight(currentPer), Ns(indexN), gamma);
+        tmpErrorM1(indexN) = norm(m1_hat(:) - m1_true(:)).^2 ./ (norm(m1_true(:))^2);
+        tmpErrorM2(indexN) = norm(m2_hat(:) - m2_true(:)).^2 ./ (norm(m2_true(:))^2);
     end
-    errorM1(indexN,:) = tmpErrorM1;
-    errorM2(indexN,:) = tmpErrorM2;
+    errorM1(iRep,:) = tmpErrorM1;
+    errorM2(iRep,:) = tmpErrorM2;
 
 end
+errorM1 = errorM1.';
+errorM2 = errorM2.';
+
 
 %% Display
 figure;
