@@ -12,8 +12,8 @@ else
 end
 
 options.maxinner = 35;
-options.tolgradnorm  = 1e-20;
-options.maxiter  = 60;
+options.tolgradnorm  = 1e-8;
+options.maxiter  = 50;
 tic;
 [x, xcost, info, ~] = trustregions(problem, initial_guess, options);
 t_opt = toc;

@@ -12,7 +12,7 @@ fprintf('DONE \n');
 fprintf('projection simulating...');
 
 
-projs = cryo_project(vol, gridSize, 1, R); % uniform at the moment
+projs = cryo_project(vol, R); % uniform at the moment
 % 
 % %   Prepare weights for integration according to distribution
 weight = zeros(total_N,1);

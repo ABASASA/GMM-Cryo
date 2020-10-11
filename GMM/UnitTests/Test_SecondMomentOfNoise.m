@@ -6,16 +6,17 @@ clear;
 fprintf('**** Starting simulation ****\n');
 fprintf('\n  \n')
 fprintf('loading data..')
-P  = 2;     % aribitrary, chosen to be small
+P  = 3;     % aribitrary, chosen to be small
+SNR = 5;
 B = get_B_inplane(P);
-
-
+Ns = 1;
+beta  = 1;       % Bandlimit ratio
+delta = 0.99;    % Truncation parameter
+eps_p = 1e-3;    % Prescribed accuracy
 
 %% Simulate kspace function
-gridSize = 19;  % number of voxels in each dimenison. take odd.
+gridSize = 15;  % number of voxels in each dimenison. take odd.
 
-% Sum of Gaussian
-% vol1    = cryo_gaussian_phantom_3d('C1_params',gridSize,1);
 sigma = 200;
 
 T     = (gridSize/5)*[0 0 0; 0.08 0.1 0; -0.1 0 0.1]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
@@ -48,9 +49,7 @@ vol  = real(fftshift(ifftn(ifftshift(volk)))); % in real domain
 vol  = vol*floor(size(x_2d,1)/2);   % Nir Sunday ?
 
 %% calculate 3D expansion and gamma coefficients
-beta  = 1;       % Bandlimit ratio
-delta = 0.99;    % Truncation parameter
-eps_p = 1e-3;    % Prescribed accuracy
+
 
 fprintf('Calculating 3D coefficients...');
 AFull = pswf_t_f_3d(vol, beta, delta);
@@ -61,8 +60,8 @@ radius = floor(gridSize/2);
 c     = beta*pi*radius;              % Nyquist bandlimit
 gamma = PSWF_2D_3D_T_mat(c, delta, eps_p);
 %Trncated
-[gamma,A] = gamma_truncate_2(gamma,AFull);
-% A = AFull;
+% [gamma,A] = gamma_truncate_2(gamma,AFull);
+A = AFull;
 fprintf('DONE \n');
 
 %% calculating moments
@@ -80,64 +79,33 @@ tic
 tt = toc;
 fprintf('DONE in about %d seconds \n', round(tt));
 
-fprintf('Moments calculation...');
-% first moment
-[ m1_true ] = FirstMoment_PSWF_v1_fixed(A, B, gamma);%Gamma_mat, sign_mat);
-fprintf('First moment is DONE. \n');
-
-% second moment
-fprintf('Mu2 calculation...');
-tic
-[m2_true] = SecondMoment_PSWF_v2(A, B, gamma, C_tensor, Gamma_mat);
-tt = toc;
-fprintf('DONE in about %d seconds \n', round(tt));
-
 %% Compute Projecitons
 paramsName = [];%'C1_params' ;
-Ns = floor(linspace(5,10000,50));
-Ns = floor(logspace(1,5,20));
 
-repNumber = 10;
 
-% end
-
-errorM1 = zeros(repNumber, length(Ns));
-errorM2 = zeros(repNumber, length(Ns));
-[~, proj_PSWF, weight] = GenerateObservationsPSWF(paramsName,...
-                                Ns(end), gridSize, B, beta, eps_p, gamma, g, x_2d, y_2d);
-total_N= Ns(end);
-
+total_N = 200000;
+[projs ,weight] = ComputeProjection (total_N, gridSize, paramsName, B, g, x_2d, y_2d);
+[projsNoised, noise, ~, sigma] = cryo_addnoise(projs, SNR,'gaussian');
+sigma = 1;
+noise = randn(size(noise)) * sigma;
+[proj_PSWFNoiseOnly] = Projection2PSWF(noise, beta, eps_p, gamma);
 %%
-for iRep = 1 : repNumber
-    total_N = Ns(end);
-    tmpErrorM1 = zeros(length(Ns),1);
-    tmpErrorM2 = zeros(length(Ns),1);
-    fprintf('This is the %d round \n', iRep);
-%         perm_list = randperm(size(R,3));
-    perm_list = randperm(total_N);
-
-    
-    parfor indexN = 1 : length(Ns)
-        currentPer = perm_list(1:Ns(indexN));
-        %% Estimate m1_hat and m2_hat
-        [m1_hat, m2_hat] = EstimateMoments(proj_PSWF(:,:,currentPer), weight(currentPer), Ns(indexN), gamma);
-        tmpErrorM1(indexN) = norm(m1_hat(:) - m1_true(:)).^2 ./ (norm(m1_true(:))^2);
-        tmpErrorM2(indexN) = norm(m2_hat(:) - m2_true(:)).^2 ./ (norm(m2_true(:))^2);
-    end
-    errorM1(iRep,:) = tmpErrorM1;
-    errorM2(iRep,:) = tmpErrorM2;
-
+m2_hat = 0;
+for i=1:total_N
+    % averaging
+    current_vec_proj = proj_PSWFNoiseOnly(:,:,i);    
+    m2_hat = m2_hat + current_vec_proj(:) * current_vec_proj(:)' * weight(i);
 end
-errorM1 = errorM1.';
-errorM2 = errorM2.';
 
-
-%% Display
-figure;
-subplot(2,1,1);
-loglog(Ns, mean(errorM1,2),'*-');
-title('Convargance for M1');
-
-subplot(2,1,2);
-loglog(Ns, mean(errorM2,2),'*-');
-title('Convargance for M2');
+m2Emp = zeros(max(gamma.ang_idx_2d)+1, nnz(gamma.ang_idx_2d==0),...
+                            max(gamma.ang_idx_2d)+1, nnz(gamma.ang_idx_2d==0));
+for ii = 1 : total_N
+    for m=0:max(gamma.ang_idx_2d)
+        for k=0:nnz(gamma.ang_idx_2d==0)-1
+            m2Emp(m+1,k+1,:,:) = reshape(m2_hat(m+1 + (k)*(max(gamma.ang_idx_2d)+1),:),...
+                 max(gamma.ang_idx_2d)+1, nnz(gamma.ang_idx_2d==0) );
+        end
+    end
+end
+m2Emp = m2Emp / total_N;
+m2Emp1 = m2Emp / sum(weight);

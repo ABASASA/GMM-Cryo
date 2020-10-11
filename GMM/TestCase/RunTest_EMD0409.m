@@ -8,10 +8,10 @@ fprintf('Generating data..')
 
 % parameters
 P        = 3;   % distribution expansion length
-gridSize = 31;   % volume resolution
+gridSize = 19;   % volume resolution
 delta    = .99;
 beta     = .9; % between 0 and 1, controls the expansion length
-total_N      = 10;
+total_N      = 10000;
 
 % getting the map -- volume expansion coefficients
 if and(gridSize == 65, beta == .6)
@@ -34,14 +34,20 @@ end
 %% distribution
 B = get_B_inplane(P);
 
-
+load ('SO3_fifteen.mat');
+[AI,AE,Acon] = linear_cons_B2(numel(B)-1,SO3);
+[BB,Breal]    = project_B_to_positive2(AI,AE,Acon,B);
+scl = 1/B{1};
+for i=1:numel(B)
+    B{i} =  scl*B{i};
+end
 %% A
-fprintf('Calculating 3D coefficients...');
-AFull = pswf_t_f_3d(vol, beta, delta);
-volBack      = pswf_t_b_3d(AFull,     gridSize, beta, delta);
-% VisualVol(vol, ['vol_3NirAsaf']);
-% VisualVol(volBack, ['vol_4NirAsaf']);
-fprintf('DONE \n');
+% fprintf('Calculating 3D coefficients...');
+% AFull = pswf_t_f_3d(vol, beta, delta);
+% volBack      = pswf_t_b_3d(AFull,     gridSize, beta, delta);
+% % VisualVol(vol, ['vol_3NirAsaf']);
+% % VisualVol(volBack, ['vol_4NirAsaf']);
+% fprintf('DONE \n');
 
 %% pre-calculating moments
 fprintf('Calculating moments: \n');
@@ -60,22 +66,28 @@ fprintf('DONE in about %d seconds \n', round(tt));
 
 %% Compute Projecitons
 
-[~, proj_PSWF, weight] = GenerateObservationsPSWFFromVol(volBack,...
+[~, proj_PSWF, weight] = GenerateObservationsPSWFFromVol(vol,...
                                 total_N, gridSize, B, beta, eps_p, gamma);
 %% Estimate m1_hat and m2_hat
+fprintf('Averaging...');
 
 [m1_hat, m2_hat] = EstimateMoments(proj_PSWF, weight, total_N, gamma);
+fprintf('...DONE \n');
 
 %% Create trimming data
 m1Size = size(m1_hat);
 m2Size = size(m2_hat);
 
 [vecBoolMoments, ~, ~] = TrimMoments_inplane(m1Size, m2Size, gamma, L, P);
-
+save('TmpData.mat');
 %% Compute W for GMM
+fprintf('Compte W...');
 
 [W, Omega] = ComputeW_inplane(A, B, proj_PSWF, weight, total_N,...
                             gamma, Gamma_mat, sign_mat, C_tensor, vecBoolMoments);
+                        fprintf('...DONE \n');
+save('TmpData.mat');
+
                      %% naming
 nameit = ['balls_example_grid_size_',num2str(gridSize)];
 tt     = datetime('now');
@@ -136,55 +148,27 @@ end
 end
 fprintf('Finished...  \n');
 
+save('TmpData.mat');
 
 
 
-%% Open a new foldr and save the results
-saveit = 1;
-filepath = 'ResultsGMM/200819 - FirstTry/';
-mkdir(filepath)
-save([filepath, 'data.mat']);
-
+%% Analysis
 [A_LS, ~] = VecAB_inplane_to_A_B(ansCell{2}.xLS, gamma);
 [A_GMM, ~] = VecAB_inplane_to_A_B(ansCell{1}.xEstGMM, gamma);
-% A_full = A;
-if saveit
-    A_LS_padded  = AFull;
-    A_GMM_padded = AFull;
-    A_padded     = AFull;
-    for j=1:length(AFull{1})
-        if j<=length(A_LS{1})
-            A_LS_padded{1}{j} = A_LS{1}{j};
-            A_padded{1}{j}     = A{1}{j};
-            A_GMM_padded{1}{j} = A_GMM{1}{j};
-        else
-            A_LS_padded{1}{j} = zeros(size(AFull{1}{j}));
-            A_padded{1}{j}     = zeros(size(AFull{1}{j}));
-            A_GMM_padded{1}{j} = zeros(size(AFull{1}{j}));
 
-        end
-    end
-    
-    %inverse prolates stransform  TO DO AGAIN WITH OLD PACKAGE
-    vol_LS  = pswf_t_b_3d(A_LS_padded, gridSize, beta, delta);
-    vol      = pswf_t_b_3d(A_padded,     gridSize, beta, delta);
-%     A = pswf_t_f_3d(vol, beta, delta);
-    % print out volumes
-    VisualVol(vol_LS,[filepath,'estLS_',nameit]);
-    VisualVol(vol, [filepath,'vol_',nameit]);
-    [~, ~, volRLS] = cryo_align_densities(vol, vol_LS,1 ,1);
-    VisualVol(volRLS, [filepath,'rot_estLS_',nameit]);
-    rel_errLS       = norm(volRLS(:)-vol(:))/norm(vol(:))
-    
-    
-    %inverse prolates stransform  TO DO AGAIN WITH OLD PACKAGE
-    vol_GMM  = pswf_t_b_3d(A_GMM_padded, gridSize, beta, delta);
-    
-    % print out volumes
-    VisualVol(vol_GMM,[filepath,'estGMM_',nameit]);
-    [~, ~, volRGMM] = cryo_align_densities(vol, vol_GMM,1 ,1);
-    VisualVol(volRGMM, [filepath,'rot_estGMM_',nameit]);
-    rel_errGMM       = norm(volRGMM(:)-vol(:))/norm(vol(:))
+isPadding = false;
+if ~isPadding
+    AFull = []; % if is padding false
 end
+estimationMethodNameString = 'LS';
+filepath = 'ResultsGMM/300819 - EMD0409_19_NoTruncation_NoReg';
+mkdir(filepath);
 save([filepath, 'data.mat']);
-       
+[rel_errLS] = AnalytsisResultsFCS_Alignment_relError(A, A_LS, filepath,...
+                estimationMethodNameString, isPadding, AFull, gridSize, beta, delta, nameit);
+rel_errLS        
+% GNN
+estimationMethodNameString = 'GMM';
+[rel_errGMM] = AnalytsisResultsFCS_Alignment_relError(A, A_GMM, filepath,...
+                estimationMethodNameString, isPadding, AFull, gridSize, beta, delta, nameit);
+rel_errGMM

@@ -23,6 +23,13 @@ for q1 = 1 : m2Size(1)
     end
 end
 
+%% Trim M2 - symmerty
+for t1  = 1 : m2Size(2)
+    for t2 = (t1+1) : m2Size(2)
+        boolM2(1, t1, 1, t2) = 0;
+    end
+end
+
 %% Create index map
 vecBoolMoments = [boolM1(:); boolM2(:)];
 end
