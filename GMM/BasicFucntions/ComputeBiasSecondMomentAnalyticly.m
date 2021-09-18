@@ -1,3 +1,4 @@
+% compute the biad of the second moment.
 function [m2Bias] = ComputeBiasSecondMomentAnalyticly(sizeImages, L, beta,...
                                                 eps_p, PSWF_Nn_p, sigma, gamma)
 %% Generate regular grid and basis functions (if needed)
@@ -20,10 +21,11 @@ nImages = 1;
 images_c = ones(sizeImages * sizeImages, 1);    % v
 images_c = images_c(points_inside_the_circle(:),:);     % Take points inside the unit disk
 
-sigma = sigma(:);
-sigma_c = sigma(points_inside_the_circle(:));
+% sigma = sigma(:);
+% sigma_c = sigma(points_inside_the_circle(:));
 
-varSigma = diag(sigma_c .^ 2);
+% varSigma = diag(sigma_c .^ 2);
+varSigma =  sigma;
 % Idsigma = sigma^2 * eye(length(images_c), length(images_c));
 
 PSWF_m = bsxfun(@times,PSWF_Nn_p.samples,abs((beta/2)*PSWF_Nn_p.alpha_Nn.').^2); 

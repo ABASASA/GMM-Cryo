@@ -1,60 +1,55 @@
 % preliminaries
 fprintf('\n  \n  \n  \n')
 clear;
-
+rng(12)
 %% generating "ground truth"
 fprintf('**** Starting simulation ****\n');
 fprintf('\n  \n')
 fprintf('loading data..')
-
-P = 3;
+P = 3;% Bandlimit cutoff
 beta  = 1;       % Bandlimit ratio
 delta = 0.99;    % Truncation parameter
 eps_p = 1e-3;    % Prescribed accuracy
 gridSize = 23;  % number of voxels in each dimenison. take odd.
-total_N      = 100000; % Number of projection
-numberOfExpriemntsRepet = 80; % number of createing projection (for chainging random dist)
-numOfIntialGuesses = 4; % Number of intial guesses
-numMaxIter = 50;
+total_N      = 20000; % Number of projection
+numberOfExpriemntsRepet = 64; % number of createing projections' sets (for chainging random dist)
+numOfIntialGuesses = 3; % Number of intial guesses
+numMaxIter = 100; % Number of Optimizatio iterations
 
-isPadding = true; % to truncate volume
-numOfStepsGMM = 2;
+isPadding = true; % to truncate the volume
+numOfStepsGMM = 1; % Number of GMM steps
 
 duplicateExpFlag = false; % repreat expirements
-noiseFunc = @(sigmaScalarInput) RadiallogNoise(gridSize, sigmaScalarInput);
-% WhiteNoise ,  RadiallogNoise
 
 
-total_Ns = total_N * ones(numberOfExpriemntsRepet,1); %vec(repmat(floor(logspace(4,6,4)),[4,1]));
-% total_Ns = [150000* ones(numberOfExpriemntsRepet/3,1); 250000* ones(numberOfExpriemntsRepet/3,1); 500000* ones(numberOfExpriemntsRepet/3,1)];
-% svPercentArray = vec(repmat(round(logspace(-1.25,-0.75,4),2),[4,1]));% 0.12 * ones(numberOfExpriemntsRepet,1);%
-svPercentArray = [1e-7 * ones(numberOfExpriemntsRepet,1)];%1e-7 * ones(numberOfExpriemntsRepet/2,1)];%vec(repmat([1e-5,1e-6,1e-7],[4,1]));% 0.12 * ones(numberOfExpriemntsRepet,1);%
-sigmas = [0.1* ones(numberOfExpriemntsRepet,1)];
+total_Ns = total_N * ones(numberOfExpriemntsRepet,1); % the number of projections in each expirements
+svPercentArray = [1e-5 * ones(numberOfExpriemntsRepet,1)]; % Optinal for futuere to add parameter to W's computation
+sigmas = [0.05* ones(numberOfExpriemntsRepet,1)]; % Noise sigma
 
+% If you want to preform the same tests for 2 sets of params, i.e., same
+% projecitons set. Then duplicateExpFlag = True; and enter the relveant
+% values to "sigmas" below (or add "total_Ns"):
 if duplicateExpFlag
-    sigmas = [0.0* ones(numberOfExpriemntsRepet/2,1); 0.032* ones(numberOfExpriemntsRepet/2,1)];
+    sigmas = [0.05* ones(numberOfExpriemntsRepet/2,1); 1* ones(numberOfExpriemntsRepet/2,1)];
 end
-filepathFather = 'ResultsGMM/101020 - BallsNew_Grid23_2StepvsLS_TruncatedVol_sigma01_RadialNoise - bigStas/';
+filepathFather = 'ResultsGMM/TestB_seed_12_20000_Ob_3_Guess_sigma005-120521/'; % Path to save results
 %% Simulate kspace function
 
 % Sum of Gaussian
-% vol1    = cryo_gaussian_phantom_3d('C1_params',gridSize,1);
 sigma = 200;
-% T     = (gridSize/5)*[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';%[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
-% g     =  @(k) exp(1i*k'*T(:,1)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
-%     exp(1i*k'*T(:,2)).*exp(-pi^2/sigma*sum(k.*k)).'  + ...
-%     exp(1i*k'*T(:,3)).*exp(-pi^2/sigma*sum(k.*k)).' ;
+
 
 T     = (gridSize/5)*[0, 0, 0;
                       0.15, 0.10, 0.10;
                       -0.1, -0.15, 0;
                       -0.1, 0.05, -0.05;
-                      0, 0.1, -0.1;]';%[0.1 -0.2 -0.4; 0.0 0.2 0; 0.1 -0.4 -0.45]';% ; 0.13 -0.2 0.1;0.1 0 -0.15]';
+                      0, 0.1, -0.1;]';
 g     =  @(k) exp(1 * 1i*k'*T(:,1)) .* exp(-0.7   * pi^2/sigma*sum(k.*k)).' + ...
               exp(1 * 1i*k'*T(:,2)) .* exp(-0.5 * pi^2/sigma*sum(k.*k)).' + ...
               exp(1 * 1i*k'*T(:,3)) .* exp(-0.4   * pi^2/sigma*sum(k.*k)).' + ...
               exp(1 * 1i*k'*T(:,4)) .* exp(-0.6   * pi^2/sigma*sum(k.*k)).' + ...
               exp(1 * 1i*k'*T(:,5)) .* exp(-0.8   * pi^2/sigma*sum(k.*k)).' ;
+
 
 %% Vol on kspace over cartesian grid
 
@@ -106,10 +101,7 @@ if isPadding
 else
     A = AFull;
 end
-% [Arecover] = RecoverSizeOfTruncatedVol(A,AFull);
-% volBack      = pswf_t_b_3d(Arecover,     gridSize, c, delta);
-% VisualVol(vol, ['vol_1']);
-% VisualVol(volBack, ['vol_1B']);
+
 %% calculating moments
 fprintf('Calculating moments: \n');
 
@@ -153,7 +145,7 @@ if duplicateExpFlag
         end 
         BsCell{i} = B;
         BsCell{i + numberOfExpriemntsRepet/2} = B;
-%         BsCell{i + 2 * numberOfExpriemntsRepet/3} = B;
+% %         BsCell{i + 2 * numberOfExpriemntsRepet/3} = B;
 
 
         intialGuessCells = {};
@@ -168,7 +160,7 @@ if duplicateExpFlag
         end
         guessesArray{i} = intialGuessCells;
         guessesArray{i + numberOfExpriemntsRepet/2} = intialGuessCells;
-%         guessesArray{i + 2 * numberOfExpriemntsRepet/3} = intialGuessCells;
+        %guessesArray{i + 2 * numberOfExpriemntsRepet/3} = intialGuessCells;
     end
 end
  
@@ -208,37 +200,44 @@ parfor iExp = 1 : numberOfExpriemntsRepet
     
     fprintf('DONE \n');
 
-    %% Compute Projecitons
-    paramsName = 'C1_params' ;
     
-    [sigmaNoise] = noiseFunc(sigmaScalar);
-% [sigmaNoise] = WhiteNoise(gridSize, sigmaScalar);
-    
-    [~, proj_PSWF, weight, ~, SNR] = GenerateObservationsPSWF(paramsName,...
-                                    total_N, gridSize, B, beta, eps_p, gamma, g, x_2d, y_2d, sigmaNoise);
+    %% Define noise params (Sigma)
+    [sigmaNoise, cov_c] = WhiteNoiseVec(gridSize,floor((gridSize)/2), sigmaScalar);
+%     [sigmaNoise, cov_c] = Noise3on3GassianVec(gridSize,floor((gridSize)/2), sigmaScalar);
 
+    %% Genetare observations
+    [projs, proj_PSWF, weight, ~, SNR] = GenerateObservationsPSWF(total_N,...
+        gridSize, B, beta, eps_p, gamma, g, x_2d, y_2d, sigmaNoise);
+    
+
+
+    %% Compute bias for second moments           
     [Bias] = ComputeBiasSecondMomentAnalyticly(gridSize, floor(gridSize/2), beta,...
-                                                eps_p, [], sigmaNoise, gamma);
+                                                eps_p, [], cov_c, gamma);
     %% Estimate m1_hat and m2_hat
     [m1_hat, m2_hat] = EstimateMoments(proj_PSWF, weight, total_N, gamma, Bias);
-    % clear proj_PSWF
 
     %% Create trimming data
     m1Size = size(m1_hat);
     m2Size = size(m2_hat);
 
     [vecBoolMoments, ~, ~] = TrimMoments_inplane(m1Size, m2Size, gamma, L, P);
+    
+    
+    %% Reg tech
+   % [sigmaNoise, cov_c] = WhiteNoiseVec(gridSize,floor((gridSize)/2), 0.05);
 
+    %noise = reshape(mvnrnd(zeros(size(sigmaNoise,1),1), sigmaNoise, total_N)', [gridSize, gridSize,total_N] );
+    %projs = projs + noise;
+    %[proj_PSWF] = Projection2PSWF(projs, beta, eps_p, gamma);
+    %[Bias] = ComputeBiasSecondMomentAnalyticly(gridSize, floor(gridSize/2), beta,...
+     %                                           eps_p, [], cov_c, gamma);
     %% Compute W for GMM
-
-%     [W, ~,OmegaCut] = ComputeW_inplane(A, B, proj_PSWF, weight, total_N,...
-%                                 gamma, Gamma_mat, sign_mat, C_tensor, vecBoolMoments, svPercent, Bias);
-    
-    W = eye(sum(vecBoolMoments)); % Define Id matrix
-
-
-
-    
+%   Ideal
+     [W, ~,OmegaCut] = ComputeW_inplane(A, B, proj_PSWF, weight, total_N,...
+                                 gamma, Gamma_mat, sign_mat, C_tensor, vecBoolMoments, svPercent, Bias);
+%   ID
+%    W = eye(sum(vecBoolMoments)); % Define Id matrix
     fprintf('Done  \n');
 
     %% setting the optimization
@@ -256,10 +255,12 @@ parfor iExp = 1 : numberOfExpriemntsRepet
     dataStruct{iExp,1}.SNR  = SNR;
     dataStruct{iExp,1}.Bias = Bias;
     dataStruct{iExp,1}.proj_PSWF = proj_PSWF;
+    dataStruct{iExp,1}.B = B;
 end
 %% running optimization
 
 ansCell = cell(numberOfExpriemntsRepet *  2 * numOfIntialGuesses, 1); % cell  to save results
+% delete(gcp('nocreate'))
 
 parfor iOpt = 1 : 2  * numOfIntialGuesses * numberOfExpriemntsRepet
     [iOptRow, iOprCol] = ind2sub([numberOfExpriemntsRepet, 2 * numOfIntialGuesses], iOpt);
@@ -274,9 +275,7 @@ parfor iOpt = 1 : 2  * numOfIntialGuesses * numberOfExpriemntsRepet
     svPercent = dataStruct{iOptRow,1}.svPercent;
     proj_PSWF = dataStruct{iOptRow,1}.proj_PSWF;
 %     proj_PSWF = [];
-    if numOfStepsGMM > 1
-        disp('Damm Ass notice me!!');
-    end
+
     weight = dataStruct{iOptRow,1}.weight;
 
     if iOprCol > numOfIntialGuesses % GMM
@@ -284,23 +283,28 @@ parfor iOpt = 1 : 2  * numOfIntialGuesses * numberOfExpriemntsRepet
         fprintf(['Run GMM RowIndex: ', num2str(iOptRow) ' Colindex:' num2str(iOprCol - numOfIntialGuesses) '...  \n']);
 
         initial_guess = intialGuessCells{iOprCol - numOfIntialGuesses};
+        %% Run GMM optimization
         [t_optGMM, xEstGMM, xcostGMM, infoGMM] = Iterative_GMM_Inplane(N, P, gamma, C_tensor,...
                         Gamma_mat, sign_mat, m1_hat, m2_hat, vecBoolMoments, proj_PSWF, weight,...
                         svPercent, initial_guess, numMaxIter, numOfStepsGMM, W, Bias);
         fprintf(['Done GMM RowIndex: ', num2str(iOptRow) ' Colindex:' num2str(iOprCol - numOfIntialGuesses)]);
+        % Save data GMM
+
         stGMM = struct;
         stGMM.t_optGMM = t_optGMM;
         stGMM.xEstGMM = xEstGMM;
         stGMM.xcostGMM = xcostGMM;
         stGMM.infoGMM = infoGMM;
         ansCell{iOpt} = stGMM;
-    else
+    else %LS
         fprintf(['Run LS RowIndex: ', num2str(iOptRow) ' Colindex:' num2str(iOprCol) '...  \n']);
         initial_guess = intialGuessCells{iOprCol};
-
+        %% Run LS optimization
         weightsLs = norm(m1_hat(:))^2/norm(m2_hat(:))^2;
         [t_optLS, xLS, xcostLS, infoLS ] = Opimization_LS_inplane(N, weightsLs, P, gamma, C_tensor, ...            
-                Gamma_mat, sign_mat, m1_hat, m2_hat, initial_guess );
+                Gamma_mat, sign_mat, m1_hat, m2_hat, initial_guess, numMaxIter);
+                       %  svPercent, initial_guess, numMaxIter, numOfStepsGMM, W, Bias);
+        % Save data LS
         stLS = struct;
         stLS.t_optLS = t_optLS;
         stLS.xLS = xLS;
@@ -319,18 +323,25 @@ end
 fprintf('Finished...  \n');
 ansCellMatrix = reshape(ansCell,[numberOfExpriemntsRepet, 2 * numOfIntialGuesses]);
 
-
-
+%%
+for iExp = 1 : numberOfExpriemntsRepet
+    dataStruct{iExp,1}.proj_PSWF =  [];
+    dataStruct{iExp,1}.Bias =  [];
+    dataStruct{iExp,1}.weight =  [];
+end
 %% save
 mkdir(filepathFather);
 save([filepathFather, 'data.mat'], 'ansCellMatrix', 'filepathFather', 'total_Ns', 'beta','total_N', 'numberOfExpriemntsRepet'...
-            ,'eps_p','delta', 'svPercentArray', 'isPadding', 'sigmas');
-%% Analtize
+            ,'eps_p','delta', 'svPercentArray', 'isPadding', 'sigmas', 'dataStruct', 'gamma');
+% delete(gcp('nocreate'))
+% parpool();
+%% Analyize results 
 for iExp = 1 : numberOfExpriemntsRepet
 minIndexLS = inf;
 currentCostLS = inf;
 minIndexGMM = inf;
 currentCostGMM = inf;
+% Find intial guess which its optimization's output scored the lowest.
 for iOpt = 1: numOfIntialGuesses
     if currentCostLS > ansCellMatrix{iExp, iOpt}.xcostLS
         minIndexLS = iOpt;
@@ -358,34 +369,22 @@ SNR = ansCellMatrix{iExp,1}.SNR;
 disp('Change ME')
 filepath = [filepathFather, 'Exp' num2str(iExp) '/'];
 mkdir(filepath);
-%% LS
+%% LS - Align, Compute FSC and rellative error
 estimationMethodNameString = 'LS';
 
 [rel_errLS, resAEstFSCLS, figFSCLS] = AnalytsisResultsFCS_Alignment_relError(A, A_LS, filepath,...
                 estimationMethodNameString, isPadding, AFull, gridSize, beta, delta, nameit,c);
 rel_errLS        
 
-% GNN
-% currentOmega = dataStruct{iExp,1}.Omega;
-% svs = svd(currentOmega);
 
 figFSCGMM = figure;
-
+%% GMM - Align, Compute FSC and rellative error
 % subplot(2,1,1);
 estimationMethodNameString = 'GMM';
 [rel_errGMM, resAEstFSCGMM, figFSCGMM] = AnalytsisResultsFCS_Alignment_relError(A, A_GMM, filepath,...
                 estimationMethodNameString, isPadding, AFull, gridSize, beta, delta, nameit,c, figFSCGMM);
 rel_errGMM
 
-% subplot(2,1,2);
-% loglog(1:length(svs), svs, 'b*-');
-% hold on;
-% indexSv = floor(length(svs) * dataStruct{iExp,1}.svPercent);
-% indexSv = find(svs > 0, 1, 'last');
-% plot( indexSv * ones(2,1), [min(svs), max(svs)], 'm--');
-% xlabel('singuar values index');
-% ylabel('Singular values');
-% title(['Max Sv: ' num2str(svs(1)) ' min: ' num2str(svs(indexSv)) ' Prop: ' num2str(svs(indexSv) / svs(1))])
 save([filepath, 'data.mat'],'rel_errLS','resAEstFSCLS','figFSCLS','rel_errGMM','resAEstFSCGMM',...
         'figFSCGMM', 'SNR');
 disp(['LS (FSC, Error) : (' num2str(resAEstFSCLS) ', ' num2str(rel_errLS) ') GMM: (' num2str(resAEstFSCGMM)...

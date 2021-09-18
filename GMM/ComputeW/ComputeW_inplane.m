@@ -1,3 +1,5 @@
+% Compute the weights.
+% Only work for inplane
 function [W, Omega, OmegaCut] = ComputeW_inplane( A, B, proj_PSWF, weight, total_N,...
                             gamma, Gamma_mat, sign_mat, C_tensor, vecBoolMoments, svPercent, Bias)
 
@@ -13,6 +15,8 @@ msAnalyticVec = msAnalyticVec(vecBoolMoments); % Trimed
 
 %% Compute the diff between aanlytic to each projection
 reminders = zeros(length(msAnalyticVec), total_N);
+reminders2 = zeros(length(msAnalyticVec), total_N);
+
 counter = 0;
 for i = 1 : total_N
     if weight(i) == 0
@@ -27,11 +31,14 @@ for i = 1 : total_N
         disp('a');
         EstimateMoments(proj_PSWF(:,:,i), weight(i), 1, gamma);
     end
-    reminders(:,i) = msAnalyticVec -  vecMsEmpiricTmp;
+%     reminders(:,i) = msAnalyticVec -  vecMsEmpiricTmp;
+    reminders(:,i) = vecMsEmpiricTmp;
+
 end
 reminders = reminders(:,1:counter);
 %% compute cov
 Omega=  cov(reminders.');
+
 OmegaCut = Omega;
 % AA = svd(Omega);
 % semilogy(AA);

@@ -3,9 +3,6 @@ function [t_opt, xEst, xcost, info] = Optimization_GMM_inplane(N, P, gamma, C_te
 
 tic
 
-% 
-% N = length(vec_AB_GT);
-% 
 %% Define manifold
 manifold  = euclideancomplexfactory(N, 1);
 problem.M = manifold;

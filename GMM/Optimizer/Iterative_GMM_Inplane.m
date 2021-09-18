@@ -13,12 +13,13 @@ function [t_opt, xEst, xcost, info] =  Iterative_GMM_Inplane(N, P, gamma, C_tens
     %% Number of GMM Step
     for i = 2 : numOfStepsGMM
         
-        [A, B] = VecAB_inplane_to_A_B(xEst, gamma);
+        [AEst, BEst] = VecAB_inplane_to_A_B(xEst, gamma);
         
-        [W, ~] = ComputeW_inplane(A, B, proj_PSWF, weight, size(proj_PSWF,3),...
+        % compute weights with the current estimation
+        [W, ~] = ComputeW_inplane(AEst, BEst, proj_PSWF, weight, size(proj_PSWF,3),...
                                 gamma, Gamma_mat, sign_mat, C_tensor, vecBoolMoments, svPercent, Bias);
-%       [W, ~,OmegaCut] = ComputeW_inplane(A, B, proj_PSWF, weight, total_N,...
-%                                 gamma, Gamma_mat, sign_mat, C_tensor, vecBoolMoments, svPercent, Bias);
+        
+        % Optimizae with current estimation and weights
         [t_optCurrent, xEst, xcost, info] = Optimization_GMM_inplane(N, P, gamma, C_tensor,...
                     Gamma_mat, sign_mat, m1_hat, m2_hat, W, vecBoolMoments, xEst, 2 * floor(numMaxIter / numOfStepsGMM)); 
         t_opt = t_opt + t_optCurrent;

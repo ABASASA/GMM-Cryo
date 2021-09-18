@@ -29,7 +29,7 @@ for t1  = 1 : m2Size(2)
         boolM2(1, t1, 1, t2) = 0;
     end
 end
-
+boolM1 = false(m1Size);
 %% Create index map
 vecBoolMoments = [boolM1(:); boolM2(:)];
 end

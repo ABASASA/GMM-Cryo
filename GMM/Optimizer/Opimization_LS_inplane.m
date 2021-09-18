@@ -1,5 +1,5 @@
 function [t_opt, x, xcost, info ] = Opimization_LS_inplane(N, weight, P, gamma, C_tensor, ...            
-        Gamma_mat, sign_mat, m1, m2, initial_guess )
+        Gamma_mat, sign_mat, m1, m2, initial_guess, numIter )
 % optimizing option 2
 manifold  = euclideancomplexfactory(N, 1);
 problem.M = manifold;
@@ -13,7 +13,7 @@ end
 
 options.maxinner = 35;
 options.tolgradnorm  = 1e-8;
-options.maxiter  = 50;
+options.maxiter  = numIter;
 tic;
 [x, xcost, info, ~] = trustregions(problem, initial_guess, options);
 t_opt = toc;
