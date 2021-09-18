@@ -10,8 +10,8 @@ However, this code is not stand alone. It is an expansion of the work in: https:
 In order to use the code: 
 1. Download the full framework from: https://github.com/nirsharon/nonuniformMoM
 2. Install/download all the third party software as writen in https://github.com/nirsharon/nonuniformMoM
-3. Add the files and folders in this package to the main root in a folder.
-4. Add the folder to the new path.
+3. Add the GMM folder the main directory of full frameworks
+4. Add the GMM folder to the new path in matlab
 5. Run the GMM code via one of the file in the new GMM folder, sub-folder: TestCase
 
 Best,
